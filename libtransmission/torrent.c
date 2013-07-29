@@ -1770,7 +1770,7 @@ tr_torrentStart (tr_torrent * tor)
   //USER: Print file info here.
   printFileInfo(tor);
 
-  initializeBookkeeping(tor->blockSize, tor->blockCount, &tor->completion);
+  initializeBookkeeping(tor->blockSize, tor->blockCount/*,&tor->completion*/);
 
   if(initializeData(tor) != 0) {
     printf("Error initializing data!\n");

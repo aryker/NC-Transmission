@@ -18,7 +18,7 @@
 
 #ifndef WIN32
  #include <sys/types.h> /* types needed by quota.h */
- #if defined(__FreeBSD__) || defined(__OpenBSD__)
+ #ifdef __FreeBSD__
   #include <ufs/ufs/quota.h> /* quotactl() */
  #elif defined (__sun)
   #include <sys/fs/ufs_quota.h> /* quotactl */
@@ -27,9 +27,6 @@
  #endif
  #ifdef HAVE_GETMNTENT
   #ifdef __sun
-   #include <sys/types.h>
-   #include <sys/stat.h>
-   #include <fcntl.h>
    #include <stdio.h>
    #include <sys/mntent.h>
    #include <sys/mnttab.h>
@@ -76,16 +73,16 @@ getdev (const char * path)
   FILE * fp;
 
 #ifdef __sun
-  struct mnttab mnt;
+  struct mnttab * mnt;
   fp = fopen(_PATH_MOUNTED, "r");
   if (fp == NULL)
     return NULL;
 
-  while (getmntent(fp, &mnt))
-    if (!tr_strcmp0 (path, mnt.mnt_mountp))
+  while (getmntent(fp, mnt))
+    if (!tr_strcmp0 (path, mnt->mnt_mountp))
       break;
   fclose(fp);
-  return mnt.mnt_special;
+  return mnt ? mnt->mnt_fstype : NULL;
 #else
   struct mntent * mnt;
 
@@ -127,15 +124,15 @@ getfstype (const char * device)
 
   FILE * fp;
 #ifdef __sun
-  struct mnttab mnt;
+  struct mnttab *mnt;
   fp = fopen(_PATH_MOUNTED, "r");
   if (fp == NULL)
     return NULL;
-  while (getmntent(fp, &mnt))
-    if (!tr_strcmp0 (device, mnt.mnt_mountp))
+  while (getmntent(fp, mnt))
+    if (!tr_strcmp0 (device, mnt->mnt_mountp))
       break;
   fclose(fp);
-  return mnt.mnt_fstype;
+  return mnt ? mnt->mnt_fstype : NULL;
 #else
   struct mntent *mnt;
 
@@ -203,7 +200,7 @@ getquota (const char * device)
   int64_t freespace;
   int64_t spaceused;
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(SYS_DARWIN)
+#if defined(__FreeBSD__) || defined(SYS_DARWIN)
   if (quotactl(device, QCMD(Q_GETQUOTA, USRQUOTA), getuid(), (caddr_t) &dq) == 0)
     {
 #elif defined(__sun)
@@ -235,13 +232,13 @@ getquota (const char * device)
           /* No quota enabled for this user */
           return -1;
         }
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__)
       spaceused = (int64_t) dq.dqb_curblocks >> 1;
 #elif defined(SYS_DARWIN)
       spaceused = (int64_t) dq.dqb_curbytes;
 #elif defined(__UCLIBC__)
       spaceused = (int64_t) btodb(dq.dqb_curblocks);
-#elif defined(__sun) || (_LINUX_QUOTA_VERSION < 2)
+#elif defined(__sun)
       spaceused = (int64_t) dq.dqb_curblocks >> 1;
 #else
       spaceused = btodb(dq.dqb_curspace);

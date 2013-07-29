@@ -22,6 +22,8 @@
 #include "utils.h" /* tr_getRatio () */
 #include "fake_coding.h"
 
+//USER: A flag that indicates whether this machine should start as a seeder or leecher.
+extern bool SEEDER;
 
 typedef struct tr_completion
 {
@@ -49,6 +51,7 @@ typedef struct tr_completion
     uint64_t sizeNow;
 }
 tr_completion;
+
 
 /**
 *** Life Cycle
@@ -129,7 +132,7 @@ static inline bool
 tr_cpBlockIsComplete (const tr_completion * cp, tr_block_index_t i)
 {
   if(SEEDER) {
-    return tr_bitfieldHas (&cp->blockBitfield, i);  //USER: FIXME: Ask Andy about this.
+    return tr_bitfieldHas (&cp->blockBitfield, i);  
   }else {
     return false;
   }

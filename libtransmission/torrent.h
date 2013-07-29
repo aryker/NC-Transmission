@@ -192,7 +192,7 @@ struct tr_torrent
     uint16_t                   blockCountInPiece;
     uint16_t                   blockCountInLastPiece;
 
-    struct tr_completion       completion;
+  struct tr_completion       completion;
 
     tr_completeness            completeness;
 

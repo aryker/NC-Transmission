@@ -1,3 +1,6 @@
+#ifndef FAKE_CODING_H
+#define FAKE_CODING_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -17,6 +20,9 @@
 #include "stats.h" /* tr_statsFileCreated () */
 #include "torrent.h"
 #include "utils.h"
+#include "completion.h"
+#include "bandwidth.h"
+#include "session.h"
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -42,8 +48,7 @@ extern uint64_t FILE_SIZE;
 //A flag for keeping track of whether or not we have downloaded the file.
 extern bool FILE_DOWNLOADED;
 
-//A flag that indicates whether this machine should start as a seeder or leecher.
-extern bool SEEDER;
+
 
 /**
  * Prints the info on the current torrent's files.
@@ -64,7 +69,7 @@ int initializeData(tr_torrent * tor);
 /**
  *Initializes appropriate data for the bookkeeping array.
  */
-void initializeBookkeeping(uint32_t blockSize, tr_block_index_t blockCount, const struct tr_completion * cp);
+void initializeBookkeeping(uint32_t blockSize, tr_block_index_t blockCount);
 
 /**
  *Checks the given index to see if we have the piece associated with it. Returns 1 if we have it, 0 if not.
@@ -104,3 +109,7 @@ void logProgress(int newPiece, bool sending);
  * Returns 0 if finished correctly, non-zero if not.
  */
 int writeFile();
+
+#endif
+
+

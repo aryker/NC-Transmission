@@ -1,26 +1,21 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
 
-#include <assert.h>
-#include <errno.h>
-#include <stdlib.h> /* bsearch () */
-#include <string.h> /* memcmp () */
 
-#include <openssl/sha.h>
 
-#include "transmission.h"
-#include "cache.h" /* tr_cacheReadBlock () */
-#include "inout.h"
-#include "log.h"
-#include "peer-common.h" /* MAX_BLOCK_SIZE */
-#include "stats.h" /* tr_statsFileCreated () */
-#include "torrent.h"
-#include "utils.h"
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #define __STDC_FORMAT_MACROS
-#include <inttypes.h>
-
 #include "fake_coding.h"
 
 
@@ -31,7 +26,7 @@ int BLOCK_TOTAL = 0; //The total number of blocks in the torrent. Set by initial
 bool BK_FINISHED = false;
 uint64_t FILE_SIZE;
 bool FILE_DOWNLOADED = false;
-bool SEEDER = true;
+bool SEEDER = false;
 
 void printFileInfo(tr_torrent * tor) {
   tr_file_index_t i;
@@ -128,7 +123,9 @@ int initializeData(tr_torrent * tor) {
 
 
 
-void initializeBookkeeping(uint32_t blockSize, tr_block_index_t blockCount, const tr_completion * cp) {
+void initializeBookkeeping(uint32_t blockSize, tr_block_index_t blockCount) {
+
+  /*
   size_t torrentSize = blockSize * blockCount;
   printf("torrentSize is: %d\n", torrentSize);
 
