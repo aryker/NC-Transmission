@@ -313,6 +313,12 @@ tr_ioTestPiece (tr_torrent * tor, tr_piece_index_t piece)
 {
   uint8_t hash[SHA_DIGEST_LENGTH];
 
+  //USER: The checksum is done here. Returning true should stop it from failing.
+
+  return true;
+
+  /*
   return recalculateHash (tor, piece, hash)
       && !memcmp (hash, tor->info.pieces[piece].hash, SHA_DIGEST_LENGTH);
+  */
 }

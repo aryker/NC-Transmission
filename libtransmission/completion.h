@@ -7,7 +7,7 @@
  * This exemption does not extend to derived works not owned by
  * the Transmission project.
  *
- * $Id: completion.h 14151 2013-07-29 04:19:15Z jordan $
+ * $Id: completion.h 13625 2012-12-05 17:29:46Z jordan $
  */
 
 #ifndef __TRANSMISSION__
@@ -20,6 +20,8 @@
 #include "transmission.h"
 #include "bitfield.h"
 #include "utils.h" /* tr_getRatio () */
+#include "fake_coding.h"
+
 
 typedef struct tr_completion
 {
@@ -91,14 +93,12 @@ tr_cpHaveTotal (const tr_completion * cp)
 
 static inline bool tr_cpHasAll (const tr_completion * cp)
 {
-    return tr_torrentHasMetadata (cp->tor)
-        && tr_bitfieldHasAll (&cp->blockBitfield);
+    return tr_bitfieldHasAll (&cp->blockBitfield);
 }
 
 static inline bool tr_cpHasNone (const tr_completion * cp)
 {
-    return !tr_torrentHasMetadata (cp->tor)
-        || tr_bitfieldHasNone (&cp->blockBitfield);
+    return tr_bitfieldHasNone (&cp->blockBitfield);
 }
 
 /**
@@ -128,7 +128,14 @@ void  tr_cpBlockAdd (tr_completion * cp, tr_block_index_t i);
 static inline bool
 tr_cpBlockIsComplete (const tr_completion * cp, tr_block_index_t i)
 {
-    return tr_bitfieldHas (&cp->blockBitfield, i);
+  if(SEEDER) {
+    return tr_bitfieldHas (&cp->blockBitfield, i);  //USER: FIXME: Ask Andy about this.
+  }else {
+    return false;
+  }
+  //USER: Try returning false to make us always hungry for pieces.
+  //TODO: Flesh out our bookkeeping functionality to use that instead of returning false.
+  //  return false;
 }
 
 /***

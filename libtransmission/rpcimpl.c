@@ -7,7 +7,7 @@
  * This exemption does not extend to derived works not owned by
  * the Transmission project.
  *
- * $Id: rpcimpl.c 14130 2013-07-20 15:37:13Z jordan $
+ * $Id: rpcimpl.c 14079 2013-05-23 00:11:09Z jordan $
  */
 
 #include <assert.h>
@@ -26,7 +26,7 @@
 #include "completion.h"
 #include "fdlimit.h"
 #include "log.h"
-#include "platform-quota.h" /* tr_device_info_get_free_space() */
+#include "platform.h" /* tr_device_info_get_free_space() */
 #include "rpcimpl.h"
 #include "session.h"
 #include "torrent.h"
@@ -181,7 +181,11 @@ getTorrents (tr_session * session,
     }
   else /* all of them */
     {
-      torrents = tr_sessionGetTorrents (session, &torrentCount);
+      tr_torrent * tor = NULL;
+      const int n = tr_sessionCountTorrents (session);
+      torrents = tr_new0 (tr_torrent *, n);
+      while ((tor = tr_torrentNext (session, tor)))
+        torrents[torrentCount++] = tor;
     }
 
   *setmeCount = torrentCount;
@@ -1589,7 +1593,6 @@ addTorrentImpl (struct tr_rpc_idle_data * data, tr_ctor * ctor)
     }
   else if (err == TR_PARSE_ERR)
     {
-      key = 0;
       result = "invalid or corrupt torrent file";
     }
   else if (err == TR_PARSE_DUPLICATE)
@@ -1599,7 +1602,7 @@ addTorrentImpl (struct tr_rpc_idle_data * data, tr_ctor * ctor)
       result = "duplicate torrent";
     }
 
-  if (tor && key)
+  if (tor != NULL)
     {
       tr_variant fields;
       tr_variantInitList (&fields, 3);
@@ -1609,7 +1612,6 @@ addTorrentImpl (struct tr_rpc_idle_data * data, tr_ctor * ctor)
       addInfo (tor, tr_variantDictAdd (data->args_out, key), &fields);
       notify (data->session, TR_RPC_TORRENT_ADDED, tor);
       tr_variantFree (&fields);
-      result = NULL;
     }
 
   tr_idle_function_done (data, result);

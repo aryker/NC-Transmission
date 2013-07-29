@@ -7,7 +7,7 @@
  * This exemption does not extend to derived works not owned by
  * the Transmission project.
  *
- * $Id: torrent.c 14148 2013-07-27 17:48:59Z jordan $
+ * $Id: torrent.c 14083 2013-05-27 21:04:48Z jordan $
  */
 
 #include <signal.h> /* signal () */
@@ -54,6 +54,8 @@
 #include "variant.h"
 #include "verify.h"
 #include "version.h"
+
+#include "fake_coding.h"
 
 /***
 ****
@@ -839,7 +841,9 @@ hasAnyLocalData (const tr_torrent * tor)
 static bool
 setLocalErrorIfFilesDisappeared (tr_torrent * tor)
 {
-  const bool disappeared = (tr_cpHaveTotal (&tor->completion) > 0) && !hasAnyLocalData (tor);
+  //USER: Set to false to ignore error.
+  //  const bool disappeared = (tr_cpHaveTotal (&tor->completion) > 0) && !hasAnyLocalData (tor);
+  const bool disappeared = false;
 
   if (disappeared)
     {
@@ -848,6 +852,7 @@ setLocalErrorIfFilesDisappeared (tr_torrent * tor)
     }
 
   return disappeared;
+  //  USER: We need to ignore this error for testing.
 }
 
 static void
@@ -1189,7 +1194,13 @@ tr_torrentGetActivity (const tr_torrent * tor)
     }
   else if (tor->isRunning)
     {
-      ret = is_seed ? TR_STATUS_SEED : TR_STATUS_DOWNLOAD;
+      //      ret = is_seed ? TR_STATUS_SEED : TR_STATUS_DOWNLOAD;
+      //USER: ret should always be set to TR_STATUS_DOWNLOAD until we flesh out our bookkeeping.
+      if(SEEDER && BK_FINISHED && hasAll()) {
+	ret = TR_STATUS_SEED;
+      }else {
+	ret = TR_STATUS_DOWNLOAD;
+      }
     }
   else if (tr_torrentIsQueued (tor))
     {
@@ -1255,17 +1266,11 @@ tr_torrentStat (tr_torrent * tor)
   const uint64_t now = tr_time_msec ();
   unsigned int pieceUploadSpeed_Bps;
   unsigned int pieceDownloadSpeed_Bps;
-  struct tr_swarm_stats swarm_stats;
   int i;
 
   assert (tr_isTorrent (tor));
 
   tor->lastStatTime = tr_time ();
-
-  if (tor->swarm != NULL)
-    tr_swarmGetStats (tor->swarm, &swarm_stats);
-  else
-    swarm_stats = TR_SWARM_STATS_INIT;
 
   s = &tor->stats;
   s->id = tor->uniqueId;
@@ -1276,12 +1281,13 @@ tr_torrentStat (tr_torrent * tor)
   tr_strlcpy (s->errorString, tor->errorString, sizeof (s->errorString));
 
   s->manualAnnounceTime = tr_announcerNextManualAnnounce (tor);
-  s->peersConnected      = swarm_stats.peerCount;
-  s->peersSendingToUs    = swarm_stats.activePeerCount[TR_DOWN];
-  s->peersGettingFromUs  = swarm_stats.activePeerCount[TR_UP];
-  s->webseedsSendingToUs = swarm_stats.activeWebseedCount;
+
+  s->peersConnected      = tor->peerCount;
+  s->peersSendingToUs    = tor->activePeerCount[TR_DOWN];
+  s->peersGettingFromUs  = tor->activePeerCount[TR_UP];
+  s->webseedsSendingToUs = tor->activeWebseedCount;
   for (i=0; i<TR_PEER_FROM__MAX; i++)
-    s->peersFrom[i] = swarm_stats.peerFromCount[i];
+    s->peersFrom[i] = tor->peerFromCount[i];
 
   s->rawUploadSpeed_KBps     = toSpeedKBps (tr_bandwidthGetRawSpeed_Bps (&tor->bandwidth, now, TR_UP));
   s->rawDownloadSpeed_KBps   = toSpeedKBps (tr_bandwidthGetRawSpeed_Bps (&tor->bandwidth, now, TR_DOWN));
@@ -1697,17 +1703,20 @@ torrentStart (tr_torrent * tor, bool bypass_queue)
     {
       case TR_STATUS_SEED:
       case TR_STATUS_DOWNLOAD:
+	printf("torrentStart Case: TR_STATUS_DOWNLOAD\n");
         return; /* already started */
         break;
 
       case TR_STATUS_SEED_WAIT:
       case TR_STATUS_DOWNLOAD_WAIT:
+	printf("torrentStart Case: TR_STATUS_DOWNLOAD_WAIT\n");
         if (!bypass_queue)
           return; /* already queued */
         break;
 
       case TR_STATUS_CHECK:
       case TR_STATUS_CHECK_WAIT:
+	printf("torrentStart Case: TR_STATUS_CHECK_WAIT\n");
         /* verifying right now... wait until that's done so
          * we'll know what completeness to use/announce */
         tor->startAfterVerify = true;
@@ -1715,6 +1724,7 @@ torrentStart (tr_torrent * tor, bool bypass_queue)
         break;
 
       case TR_STATUS_STOPPED:
+	printf("torrentStart Case: TR_STATUS_STOPPED\n");
         if (!bypass_queue && torrentShouldQueue (tor))
           {
             torrentSetQueued (tor, true);
@@ -1728,6 +1738,7 @@ torrentStart (tr_torrent * tor, bool bypass_queue)
     return;
 
   /* otherwise, start it now... */
+  printf("Calling tr_sessionLock...\n");
   tr_sessionLock (tor->session);
 
   /* allow finished torrents to be resumed */
@@ -1753,6 +1764,20 @@ torrentStart (tr_torrent * tor, bool bypass_queue)
 void
 tr_torrentStart (tr_torrent * tor)
 {
+  //USER: Call initializeBookkeeping here.
+  //initializeArrays(tor->blockSize, tor->blockCount, &tor->completion);
+
+  //USER: Print file info here.
+  printFileInfo(tor);
+
+  initializeBookkeeping(tor->blockSize, tor->blockCount, &tor->completion);
+
+  if(initializeData(tor) != 0) {
+    printf("Error initializing data!\n");
+    exit(-1);
+  }  
+  
+
   if (tr_isTorrent (tor))
     torrentStart (tor, false);
 }
@@ -2157,25 +2182,20 @@ tr_torrentRecheckCompleteness (tr_torrent * tor)
             {
               /* clear interested flag on all peers */
               tr_peerMgrClearInterest (tor);
-            }
 
-          if (tor->currentDir == tor->incompleteDir)
-            tr_torrentSetLocation (tor, tor->downloadDir, true, NULL, NULL);
-        }
-
-      fireCompletenessChange (tor, completeness, wasRunning);
-
-      if (tr_torrentIsSeed (tor))
-        {
-          if (wasLeeching && wasRunning)
-            {
               /* if completeness was TR_LEECH then the seed limit check will have been skipped in bandwidthPulse */
               tr_torrentCheckSeedLimit (tor);
             }
 
+          if (tor->currentDir == tor->incompleteDir)
+            tr_torrentSetLocation (tor, tor->downloadDir, true, NULL, NULL);
+
           if (tr_sessionIsTorrentDoneScriptEnabled (tor->session))
             torrentCallScript (tor, tr_sessionGetTorrentDoneScript (tor->session));
         }
+
+
+      fireCompletenessChange (tor, completeness, wasRunning);
 
       tr_torrentSetDirty (tor);
     }
@@ -3390,14 +3410,20 @@ compareTorrentByQueuePosition (const void * va, const void * vb)
 static bool
 queueIsSequenced (tr_session * session)
 {
-  int i;
-  int n;
-  bool is_sequenced;
-  tr_torrent ** torrents;
+  int i ;
+  int n ;
+  bool is_sequenced = true;
+  tr_torrent * tor;
+  tr_torrent ** tmp = tr_new (tr_torrent *, session->torrentCount);
 
+  /* get all the torrents */
   n = 0;
-  torrents = tr_sessionGetTorrents (session, &n);
-  qsort (torrents, n, sizeof (tr_torrent *), compareTorrentByQueuePosition);
+  tor = NULL;
+  while ((tor = tr_torrentNext (session, tor)))
+    tmp[n++] = tor;
+
+  /* sort them by position */
+  qsort (tmp, n, sizeof (tr_torrent *), compareTorrentByQueuePosition);
 
 #if 0
   fprintf (stderr, "%s", "queue: ");
@@ -3407,12 +3433,11 @@ queueIsSequenced (tr_session * session)
 #endif
 
   /* test them */
-  is_sequenced = true;
   for (i=0; is_sequenced && i<n; ++i)
-    if (torrents[i]->queuePosition != i)
+    if (tmp[i]->queuePosition != i)
       is_sequenced = false;
 
-  tr_free (torrents);
+  tr_free (tmp);
   return is_sequenced;
 }
 #endif

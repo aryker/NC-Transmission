@@ -7,7 +7,7 @@
  * This exemption does not extend to derived works not owned by
  * the Transmission project.
  *
- * $Id: session.c 14148 2013-07-27 17:48:59Z jordan $
+ * $Id: session.c 14081 2013-05-23 05:43:12Z jordan $
  */
 
 #include <assert.h>
@@ -39,8 +39,7 @@
 #include "net.h"
 #include "peer-io.h"
 #include "peer-mgr.h"
-#include "platform.h" /* tr_lock, tr_getTorrentDir () */
-#include "platform-quota.h" /* tr_device_info_free() */
+#include "platform.h" /* tr_lock, tr_getTorrentDir (), tr_getFreeSpace () */
 #include "port-forwarding.h"
 #include "rpc-server.h"
 #include "session.h"
@@ -941,7 +940,7 @@ sessionSetImpl (void * vdata)
 }
 
 void
-tr_sessionSet (tr_session * session, tr_variant * settings)
+tr_sessionSet (tr_session * session, tr_variant  * settings)
 {
   struct init_data data;
   data.done = false;
@@ -1740,28 +1739,6 @@ tr_sessionCountTorrents (const tr_session * session)
   return tr_isSession (session) ? session->torrentCount : 0;
 }
 
-tr_torrent **
-tr_sessionGetTorrents (tr_session * session, int * setme_n)
-{
-  int i;
-  int n;
-  tr_torrent ** torrents;
-  tr_torrent * tor;
-
-  assert (tr_isSession (session));
-  assert (setme_n != NULL);
-
-  n = tr_sessionCountTorrents (session);
-  *setme_n = n;
-
-  torrents = tr_new (tr_torrent *, n);
-  tor = NULL;
-  for (i=0; i<n; ++i)
-    torrents[i] = tor = tr_torrentNext (session, tor);
-
-  return torrents;
-} 
-
 static int
 compareTorrentByCur (const void * va, const void * vb)
 {
@@ -1782,6 +1759,7 @@ static void
 sessionCloseImpl (void * vsession)
 {
   int i, n;
+  tr_torrent * tor;
   tr_torrent ** torrents;
   tr_session * session = vsession;
 
@@ -1810,7 +1788,11 @@ sessionCloseImpl (void * vsession)
   /* Close the torrents. Get the most active ones first so that
    * if we can't get them all closed in a reasonable amount of time,
    * at least we get the most important ones first. */
-  torrents = tr_sessionGetTorrents (session, &n);
+  tor = NULL;
+  n = session->torrentCount;
+  torrents = tr_new (tr_torrent *, session->torrentCount);
+  for (i=0; i<n; ++i)
+    torrents[i] = tor = tr_torrentNext (session, tor);
   qsort (torrents, n, sizeof (tr_torrent*), compareTorrentByCur);
   for (i=0; i<n; ++i)
     tr_torrentFree (torrents[i]);
@@ -2822,7 +2804,6 @@ tr_sessionGetNextQueuedTorrents (tr_session   * session,
                                  tr_ptrArray  * setme)
 {
   size_t i;
-  size_t n;
   tr_torrent * tor;
   struct TorrentAndPosition * candidates;
 
@@ -2830,8 +2811,7 @@ tr_sessionGetNextQueuedTorrents (tr_session   * session,
   assert (tr_isDirection (direction));
 
   /* build an array of the candidates */
-  n = tr_sessionCountTorrents (session);
-  candidates = tr_new (struct TorrentAndPosition, n);
+  candidates = tr_new (struct TorrentAndPosition, session->torrentCount);
   i = 0;
   tor = NULL;
   while ((tor = tr_torrentNext (session, tor)))

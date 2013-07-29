@@ -7,7 +7,7 @@
  * This exemption does not extend to derived works not owned by
  * the Transmission project.
  *
- * $Id: fdlimit.c 14147 2013-07-27 16:18:12Z jordan $
+ * $Id: fdlimit.c 13905 2013-01-31 05:05:44Z jordan $
  */
 
 #ifdef HAVE_POSIX_FADVISE
@@ -335,8 +335,7 @@ cached_file_open (struct tr_cached_file  * o,
 {
   int flags;
   struct stat sb;
-  bool already_existed;
-  bool resize_needed;
+  bool alreadyExisted;
 
   /* create subfolders, if any */
   if (writable)
@@ -352,15 +351,11 @@ cached_file_open (struct tr_cached_file  * o,
       tr_free (dir);
     }
 
-  already_existed = !stat (filename, &sb) && S_ISREG (sb.st_mode);
+  alreadyExisted = !stat (filename, &sb) && S_ISREG (sb.st_mode);
 
-  if (writable && !already_existed && (allocation == TR_PREALLOCATE_FULL))
+  if (writable && !alreadyExisted && (allocation == TR_PREALLOCATE_FULL))
     if (preallocate_file_full (filename, file_size))
       tr_logAddDebug ("Preallocated file \"%s\"", filename);
-
-  /* we can't resize the file w/o write permissions */
-  resize_needed = already_existed && (file_size < (uint64_t)sb.st_size);
-  writable |= resize_needed;
 
   /* open the file */
   flags = writable ? (O_RDWR | O_CREAT) : O_RDONLY;
@@ -380,14 +375,17 @@ cached_file_open (struct tr_cached_file  * o,
    * http://trac.transmissionbt.com/ticket/2228
    * https://bugs.launchpad.net/ubuntu/+source/transmission/+bug/318249
    */
-  if (resize_needed && (ftruncate (o->fd, file_size) == -1))
+  if (alreadyExisted && (file_size < (uint64_t)sb.st_size))
     {
-      const int err = errno;
-      tr_logAddError (_("Couldn't truncate \"%1$s\": %2$s"), filename, tr_strerror (err));
-      return err;
+      if (ftruncate (o->fd, file_size) == -1)
+        {
+          const int err = errno;
+          tr_logAddError (_("Couldn't truncate \"%1$s\": %2$s"), filename, tr_strerror (err));
+          return err;
+        }
     }
 
-  if (writable && !already_existed && (allocation == TR_PREALLOCATE_SPARSE))
+  if (writable && !alreadyExisted && (allocation == TR_PREALLOCATE_SPARSE))
     preallocate_file_sparse (o->fd, file_size);
 
   /* Many (most?) clients request blocks in ascending order,

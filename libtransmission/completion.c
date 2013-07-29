@@ -16,6 +16,7 @@
 #include "completion.h"
 #include "torrent.h"
 #include "utils.h"
+#include "fake_coding.h"
 
 /***
 ****
@@ -63,14 +64,27 @@ tr_cpBlockInit (tr_completion * cp, const tr_bitfield * b)
 tr_completeness
 tr_cpGetStatus (const tr_completion * cp)
 {
-  if (tr_cpHasAll (cp))
-    return TR_SEED;
+  if (tr_cpHasAll (cp)) {
+    /*USER: If the bookkeeping array is done initializing, then use our bookkeeping to determine if
+     *       we are a seed. If it is not done, then use Transmission's bookkeeping. */
+    if(BK_FINISHED) {
+      if(SEEDER && hasAll()) {
+	return TR_SEED;
+      }else {
+	return TR_PARTIAL_SEED;
+      }
+    }else {
+      printf("Our bookkeeping is not ready yet; using transmission's...\n");
+      return TR_SEED;
+    }
+  }
 
   if (!tr_torrentHasMetadata (cp->tor))
     return TR_LEECH;
 
   if (cp->sizeNow == tr_cpSizeWhenDone (cp))
     return TR_PARTIAL_SEED;
+
 
   return TR_LEECH;
 }

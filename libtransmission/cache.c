@@ -11,6 +11,10 @@
  */
 
 #include <stdlib.h> /* qsort () */
+#include <stdio.h>
+#include <time.h>
+
+#include "fake_coding.h"
 
 #include <event2/buffer.h>
 
@@ -37,6 +41,8 @@
 /****
 *****
 ****/
+
+int seedCount = 0;
 
 struct cache_block
 {
@@ -332,6 +338,45 @@ tr_cacheWriteBlock (tr_cache         * cache,
                     uint32_t           length,
                     struct evbuffer  * writeme)
 {
+
+  printf("\nPreparing to write a block...\n");  
+
+  int err = 0; //We may use this someday.
+
+  char* name = torrent->info.name;
+  printf("Torrent files are currently located in: %s %s\n", torrent->currentDir, name);
+
+  //Get data from evbuffer.
+  char *data = (char*)calloc(1, length);
+  if(!(evbuffer_copyout(writeme, data, length))) {
+    //Copyout function failed for some reason.
+    printf("ERROR: evbuffer_copyout failed!\n");
+  }
+
+  int index;
+
+  //Get the index
+  printf("Getting the index of the block...\n");
+  memcpy(&index, data, sizeof(int));
+  printf("The index of the block is: %d\n", index);
+
+  //Learn about evbuffer
+  printf("The size of the buffer is: %d\n", evbuffer_get_length(writeme));
+  //  printf("The contiguous size of the buffer is: %d\n", evbuffer_get_contiguous_space(writeme));
+
+  //Write piece data to global array
+  printf("Writing the piece data...\n");
+  //  writeData(index, writeme, length);
+  memcpy((ALEX_RYKER + (length - sizeof(int)) * index), data, length);
+
+  //Do bookkeeping
+  printf("Doing writeBlock bookkeeping...\n");
+  setHave(piece);
+
+  //Print progress
+  printProgress();
+
+  /*
   struct cache_block * cb = findBlock (cache, torrent, piece, offset);
 
   assert (tr_amInEventThread (torrent->session));
@@ -358,6 +403,9 @@ tr_cacheWriteBlock (tr_cache         * cache,
   cache->cache_write_bytes += cb->length;
 
   return cacheTrim (cache);
+  */
+
+  return err;
 }
 
 int
@@ -368,13 +416,46 @@ tr_cacheReadBlock (tr_cache         * cache,
                    uint32_t           len,
                    uint8_t          * setme)
 {
-  int err = 0;
+
+  printf("Preparing to read a block...\n");
+
+  int err = 0; //we may use this someday.
+
+  printf("Torrent files are currently located in: %s\n", torrent->currentDir);
+
+  //make sure we only seed the generator once.
+  if(seedCount == 0) {
+    printf("Seeding generator...\n");
+    srand(time(NULL));    
+    seedCount++;
+  }
+
+
+  int randIndex = rand() % torrent->info.pieceCount;
+  bool finished = false;
+  uint32_t myLen = (len - sizeof(int));
+  while(!finished) {
+    printf("Trying piece %d...\n", randIndex);
+    if(checkIndex(randIndex)) {
+      char* data = getPiece(randIndex, len); //Get a pointer to the randomly-chosen piece data
+      memcpy(setme, &randIndex, sizeof(int)); //Write the index number
+      memcpy((setme + sizeof(int)), data, len - sizeof(int)); //Write data
+      finished = true;
+    }else {
+      randIndex = rand() % torrent->info.pieceCount;
+    }
+  }
+
+  printf("Done with readBlock!\n");
+
+  /*
   struct cache_block * cb = findBlock (cache, torrent, piece, offset);
 
   if (cb)
     evbuffer_copyout (cb->evbuf, setme, len);
   else
     err = tr_ioRead (torrent, piece, offset, len, setme);
+  */
 
   return err;
 }

@@ -310,6 +310,7 @@ tr_runInEventThread (tr_session * session,
 
     if (tr_amInThread (session->events->thread))
     {
+      //      printf("tr_amInThread true.\n");
       (func)(user_data);
     }
     else
@@ -319,6 +320,7 @@ tr_runInEventThread (tr_session * session,
         tr_lock *          lock = session->events->lock;
         struct tr_run_data data;
 
+	//	printf("tr_amInThread false.\n");
         tr_lockLock (lock);
         pipewrite (fd, &ch, 1);
         data.func = func;
