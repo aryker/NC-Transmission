@@ -1,20 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #define __STDC_FORMAT_MACROS
 #include "fake_coding.h"
 
@@ -125,7 +108,7 @@ int initializeData(tr_torrent * tor) {
 
 void initializeBookkeeping(uint32_t blockSize, tr_block_index_t blockCount) {
 
-  /*
+
   size_t torrentSize = blockSize * blockCount;
   printf("torrentSize is: %d\n", torrentSize);
 
